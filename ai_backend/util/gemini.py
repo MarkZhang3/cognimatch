@@ -1,8 +1,44 @@
 import os
-from typing import Callable, List, Union, Optional
+import time
+from typing import List, Union, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 import google.generativeai as genai
+
+# ------------------------
+# Global Rate Limiting
+# ------------------------
+RATE_LIMIT = 1000
+requests_made_this_minute = 0
+minute_start_time = time.time()
+
+def check_rate_limit():
+    """
+    Naive bucket-based rate limiter. It uses a 60-second window:
+      - If the limit is reached before the 60s are up, we sleep until the window resets.
+      - Then we reset the counter and the start time.
+    """
+    global requests_made_this_minute, minute_start_time
+    
+    now = time.time()
+    elapsed = now - minute_start_time
+    
+    # If more than 60 seconds have passed since last reset, start a new window
+    if elapsed >= 60:
+        requests_made_this_minute = 0
+        minute_start_time = now
+    
+    # If we're at or above limit and still in the current window, sleep
+    if requests_made_this_minute >= RATE_LIMIT:
+        sleep_time = 60 - elapsed
+        print(f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds...")
+        time.sleep(sleep_time)
+        # Reset counters
+        requests_made_this_minute = 0
+        minute_start_time = time.time()
+    
+    # Count the new request
+    requests_made_this_minute += 1
 
 # Load .env file
 load_dotenv()
@@ -20,15 +56,11 @@ class GeminiImage:
 @dataclass
 class GeminiTextRequest:
     prompt: str
-    stream: bool = False
-    on_stream: Optional[Callable[[str], None]] = None
 
 
 @dataclass
 class GeminiMultimodalRequest:
     parts: List[Union[str, GeminiImage]]
-    stream: bool = False
-    on_stream: Optional[Callable[[str], None]] = None
 
 
 @dataclass
@@ -39,25 +71,21 @@ class GeminiResponse:
 
 # --- Gemini Handler ---
 class GeminiHandler:
-    def __init__(self):
+    def __init__(self, model_name: str="gemini-2.0-flash"):
         genai.configure(api_key=API_KEY)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.model = genai.GenerativeModel(model_name)
 
     def send_text_prompt(self, request: GeminiTextRequest) -> GeminiResponse:
-        if request.stream and request.on_stream:
-            stream = self.model.generate_content(request.prompt, stream=True)
-            full_text = ""
-            for chunk in stream:
-                part = chunk.text
-                if part:
-                    request.on_stream(part)
-                    full_text += part
-            return GeminiResponse(text=full_text)
-        else:
-            response = self.model.generate_content(request.prompt)
-            return GeminiResponse(text=response.text, raw=response)
+        # Check rate limit before sending
+        check_rate_limit()
+        
+        response = self.model.generate_content(request.prompt)
+        return GeminiResponse(text=response.text, raw=response)
 
     def send_multimodal_prompt(self, request: GeminiMultimodalRequest) -> GeminiResponse:
+        # Check rate limit before sending
+        check_rate_limit()
+        
         parts = []
         for item in request.parts:
             if isinstance(item, str):
@@ -70,15 +98,5 @@ class GeminiHandler:
             else:
                 raise ValueError("Unsupported input part: must be str or GeminiImage")
 
-        if request.stream and request.on_stream:
-            stream = self.model.generate_content(parts, stream=True)
-            full_text = ""
-            for chunk in stream:
-                part = chunk.text
-                if part:
-                    request.on_stream(part)
-                    full_text += part
-            return GeminiResponse(text=full_text)
-        else:
-            response = self.model.generate_content(parts)
-            return GeminiResponse(text=response.text, raw=response)
+        response = self.model.generate_content(parts)
+        return GeminiResponse(text=response.text, raw=response)
