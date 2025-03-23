@@ -6,6 +6,7 @@ import requests
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from agent import Agent, SafetyAgent, EvaluatorAgent, SentimentAgent
 from util.gemini import GeminiHandler
 import asyncio
@@ -18,6 +19,14 @@ from typing import Dict, Any
 FORMS_DIR = "./database/forms"
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
 
 surveys: dict[str, Survey] = {}
 
@@ -38,6 +47,8 @@ class GetConvoResultsRequest(BaseModel):
     convo_id: str
 
 class ConvoResults(BaseModel):
+    speaker_1_id: str
+    speaker_2_id: str
     speaker_1_compatability_with_speaker_2: int
     speaker_2_compatability_with_speaker_1: int
     speaker_1_analysis: str
@@ -121,7 +132,7 @@ def send_to_front_end(speaker: str, speaking_to: str, text: str, b_64_image: str
 
 
 
-def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_agent: EvaluatorAgent, sentiment_agent_1: SentimentAgent, sentiment_agent_2: SentimentAgent, max_turns: int = 20, delay: float = 5.0):
+def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_agent: EvaluatorAgent, sentiment_agent_1: SentimentAgent, sentiment_agent_2: SentimentAgent, max_turns: int = 20, delay: float = 4.0):
     """
     Lets agent1 and agent2 talk to each other in a loop, 
     streaming each response in real-time, until one outputs "[STOP]" 
@@ -146,7 +157,7 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
             eval_agent.add_log(agent2, "<STOPPED THE CONVERSATION>")
             print("\nAgent2 indicated stop.\n")
             break
-        send_to_front_end(agent2.name, agent1.name, text_2, image_b64_2, sentiment_2, False)
+        send_to_front_end(agent2.name, agent1.name, text_2, image_b64_2, sentiment_2, turn_count == max_turns)
         agent2.talk_to(agent1, text_2, image_b64_2, image_str_2)
         # Introduce a small delay
         time.sleep(delay)
@@ -219,12 +230,16 @@ async def get_compatability_results(convo_id: str):
         raise HTTPException(status_code=400, detail=f"convo id has no results.")
     
     # get convo results
+    speaker_1_id = convo_evaluations[convo_id].speaker1.id
+    speaker_2_id = convo_evaluations[convo_id].speaker2.id
     speaker_1_score, speaker_1_analysis, speaker_2_score, speaker_2_analysis = convo_evaluations[convo_id].get_evaluation()
     return ConvoResults(
         speaker_1_compatability_with_speaker_2=speaker_1_score,
         speaker_1_analysis=speaker_1_analysis,
         speaker_2_compatability_with_speaker_1=speaker_2_score,
-        speaker_2_analysis=speaker_2_analysis
+        speaker_2_analysis=speaker_2_analysis,
+        speaker_1_id=speaker_1_id,
+        speaker_2_id=speaker_2_id,
     )
 
 

@@ -25,6 +25,7 @@ IMAGE: image_i (i.e image_1 nothing else)
 TEXT: [STOP]
 DO NOT PREPEND AGENT SPEAKING, YOU MUST FOLLOW THE FORMAT ABOVE.
 The images in the given to you is associated in the image ordering of the chat i.e first image will correspond to the first message that has an image. Try to react to images.
+You are encouraged to try to send images.
 """
 
 
@@ -50,64 +51,65 @@ class Agent:
         Parses response_text to extract combined text and detect one image reference
         (no matter its casing). The logic is:
         1) Remove/accumulate all text from lines beginning with 'TEXT:' (ignoring case)
-            while dropping the 'TEXT:' prefix.
+        while dropping the 'TEXT:' prefix.
         2) Identify references like 'image_1' or 'IMAGE_42' anywhere in the text.
-            As soon as found, store the reference in lowercase (e.g. 'image_1'), remove
-            it from text, and treat it as the selected image.
-        3) Output a dictionary with:
+        As soon as found, store the reference in lowercase (e.g. 'image_1'), remove
+        it from text, and treat it as the selected image.
+        3) Remove any 'Agent_i' references (ignoring case) from the combined text.
+        4) Remove any bare 'TEXT:' tokens (ignoring case) from the combined text as well.
+        5) Output a dictionary with:
             {
                 "text": <combined_text_without_image_references_or_TEXT_prefixes>,
                 "image": <image_reference_in_lowercase_if_found_else_empty_string>
             }
         """
+
         # Split by newlines
         lines = response_text.strip().split('\n')
-        
+
         # For accumulating cleaned lines
         cleaned_lines = []
         image_ref = ""
 
         # Regex to detect 'TEXT:' prefix ignoring case
         text_prefix_pattern = re.compile(r'(?i)^\s*TEXT:\s*(.*)$')
-        
+
         # Regex to detect "IMAGE:" ignoring case plus a subsequent image reference.
         # Example matches: "IMAGE: image_1", "image: image_42"
-        # Group 1 captures the entire snippet "IMAGE: image_x"
-        # Group 2 captures the actual 'image_x' portion
         image_prefixed_pattern = re.compile(r'(?i)\bIMAGE\s*:\s*(image_\d+)\b')
-        
+
         # Regex to detect direct references to 'image_<number>' ignoring case
         image_direct_pattern = re.compile(r'(?i)\bimage_\d+\b')
 
         for line in lines:
             line_stripped = line.strip()
 
-            # If line starts with TEXT:, ignore the prefix
+            # If line starts with TEXT:, ignore that prefix
             text_prefix_match = text_prefix_pattern.match(line_stripped)
             if text_prefix_match:
                 content = text_prefix_match.group(1)
             else:
                 content = line_stripped
-            
+
             # 1) Remove all "IMAGE: image_n" patterns
-            #    For each match, store the last reference in image_ref
             while True:
                 match = image_prefixed_pattern.search(content)
                 if not match:
                     break
-                # The substring to remove: e.g. 'IMAGE: image_3'
-                snippet = match.group(1)  # 'image_3' from the capturing group
-                image_ref = snippet.lower()  # record the reference
-                # Remove the entire "IMAGE: image_3" portion from text
+                # 'image_3' from the capturing group
+                snippet = match.group(1)
+                # Record the last reference found
+                image_ref = snippet.lower()
+                # Remove the entire pattern
                 content = (content[:match.start()] + content[match.end():]).strip()
 
-            # 2) Then remove direct references like 'image_1' with no 'IMAGE:' prefix
+            # 2) Remove direct references like 'image_1' with no 'IMAGE:' prefix
             while True:
                 direct_match = image_direct_pattern.search(content)
                 if not direct_match:
                     break
                 snippet = direct_match.group(0)  # e.g. 'image_2'
-                image_ref = snippet.lower()      # record last reference
+                image_ref = snippet.lower()      # record the last reference
                 content = (content[:direct_match.start()] + content[direct_match.end():]).strip()
 
             if content:
@@ -115,9 +117,16 @@ class Agent:
 
         # Combine the text
         combined_text = " ".join(cleaned_lines)
-        print(combined_text)
-        print("======")
-        print(image_ref)
+
+        # 3) Remove all "Agent_i" references (ignoring case)
+        combined_text = re.sub(r'(?i)\bagent_\d+\b', '', combined_text)
+
+        # 4) Remove any standalone 'TEXT:' tokens (ignoring case)
+        combined_text = re.sub(r'(?i)\btext:\b', '', combined_text)
+
+        # Clean extra whitespace
+        combined_text = re.sub(r'\s+', ' ', combined_text).strip()
+
         return {
             "text": combined_text,
             "image": image_ref
@@ -254,7 +263,7 @@ class EvaluatorAgent:
     SYSTEM_PROMPT = """
     You are a conversation evaluator, given two profiles from two speakers and their conversation log, you will evaluate their overall coversation and compatability.
     Make sure you evaluation is rooted more in the actual conversation and less in the profiles, two people with differing profiles still can have a compatable relationship if their conversation was insightful.
-    You should be critical and realistic, don't give everyone a high compatability. Compatability may not work both ways.
+    Compatability may not be equal both ways, remember.
     """
     OUTPUT_FORMAT = """
     You must output in this format, do not output anything else besides what is below:

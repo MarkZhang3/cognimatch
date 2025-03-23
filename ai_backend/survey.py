@@ -25,19 +25,11 @@ Common Expressions or Phrases (frequently used words, slang, or catchphrases)
 
 Other Notable Characteristics (any relevant additional traits)
 
-Output Format: Return a single JSON object in the following structure (add or remove fields as needed based on the data you have):
+Output Format: Return a single JSON object
 
-json
-{
-  "Name": "String describing name or nickname",
-  "Hobbies_Interests": "Short description or list of key interests",
-  "Texting_Style": "Brief description (sentence length, formal/informal, emoticons, etc.)",
-  "Tone": "Brief descriptor of typical tone or mood",
-  "Common_Expressions": "Short list or summary of frequently used phrases",
-  "Notable_Characteristics": "Any additional pertinent info"
-}
 Focus your output on enabling someone to replicate the conversation style of the individual accurately.
-Make it comphrensive, try to store all aspects about this individual in the json file to fully replicate their mannerisms. There should be enough information to fully emulate their conversations using an LLM, so be detailed.
+Make it comphrensive, try to store all aspects about this individual in the json file to fully replicate their mannerisms. There should be enough information to fully emulate their conversations and facts about them (interests, schooling, etc...) using an LLM, so be detailed.
+Make it detailed, make sure to capture all information in the form, their personality, interests, location, school, all properties about them. 
 [BELOW ARE THE SURVEY RESULTS]
 """
 IMAGE_CAPTIONER_SYSTEM_PROMPT = """

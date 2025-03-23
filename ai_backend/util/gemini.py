@@ -9,7 +9,7 @@ import base64
 # ------------------------
 # Global Rate Limiting
 # ------------------------
-RATE_LIMIT = 500
+RATE_LIMIT = 1000
 requests_made_this_minute = 0
 minute_start_time = time.time()
 

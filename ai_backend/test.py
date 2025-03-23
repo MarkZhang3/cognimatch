@@ -333,59 +333,6 @@ reels break
         }
     }
 ]
-
-        "discordChatLogs": 
-        ur so fucking fat I gotta fr do this man
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-who else would do this for u
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-u better run on this treadmill bro
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-then repeat
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-then go to school and sleep at 2 am
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-and clock in to 12 pm
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-dude i wake up 7 am fucking every day
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-shit even my parents dont do this for u bro
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-to get this treadmill for u
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-i basically work 2 weeks for free for u
-Mr. DarkWarrior — 2025-03-14, 6:22 PM
-Image
-Mr. DarkWarrior — 2025-03-14, 6:20 PM
-yo im buying u the treadmill ok
-Mr. DarkWarrior — 2025-03-14, 5:05 PM
-zoa
-Mr. DarkWarrior — 2025-03-14, 5:05 PM
-put a drink into the firdge
-Mr. DarkWarrior — 2025-03-12, 9:35 PM
-To the TMU lib
-Mr. DarkWarrior — 2025-03-12, 9:35 PM
-Bro just go
-Mr. DarkWarrior — 2025-03-12, 9:25 PM
-u fucked nigga!
-Mr. DarkWarrior — 2025-03-12, 9:24 PM
-🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣 🤣
-Mr. DarkWarrior — 2025-03-12, 9:23 PM
-I aint coming back
-Mr. DarkWarrior — 2025-03-10, 8:19 PM
-so I awlasy wash once a week
-Mr. DarkWarrior — 2025-03-10, 8:19 PM
-cuz my mom would be liek hang it dry
-Mr. DarkWarrior — 2025-03-10, 8:19 PM
-like I can't do that at home
-Mr. DarkWarrior — 2025-03-10, 8:19 PM
-like once I put everything back in it's warm
-Mr. DarkWarrior — 2025-03-10, 8:19 PM
-like shit it be bettter like that
-Mr. DarkWarrior — 2025-03-10, 8:19 PM
-yea no shit cuz it smells good and I throw them in the drier
-
-    }
     """
     gemini_handler = GeminiHandler()
     agent1 = Agent(agent_id="A", profile=profile_a, gemini_handler=gemini_handler)
