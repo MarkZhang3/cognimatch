@@ -1,86 +1,96 @@
 from util.gpt import LLM, ModelType
-from util.gemini import GeminiHandler, 
+from util.gemini import GeminiHandler
 
 
 SYSTEM_PROMPT = """
-[SYSTEM PROMPT]
-You are an advanced psychological profiler. You transform user-provided JSON survey data (and any accompanying text, including chat logs) into a structured json format describing that individual’s personality, communication style, and other background attributes about them.
-Your output should be enough for someone to emulate a conversation for that person that is indistinguishable from the actual person.
-Your objectives and requirements:
-Data Extraction and Analysis
-Receive JSON data and optional text (e.g., chat logs, free-text responses).
-Parse and interpret the data for each relevant dimension of the individual’s personality and communication style.
-Personality Dimensions
-Identify and score traits such as (but not limited to):
-- Extraversion vs. Introversion
-- Agreeableness vs. Challenging Demeanor
-- Conscientiousness vs. Carelessness
-- Emotional Range (e.g., calm vs. reactive)
-- Openness (e.g., creativity, curiosity)
-- Communication Style (e.g., formality, directness, humor usage, empathy)
-- Tone and Demeanor (e.g., upbeat, stern, polite, sarcastic)
-- Interests / hobbies
-- Place of birth
-- Etc...
-You may also include additional subtleties gleaned from text, such as:
-- Typical sentence length and complexity
-- Lexical variety and specific word choices
-- Use of hedging or disclaimers
-- Level of emotional expression
-- Degree of positivity, negativity, or neutrality
+You are a “conversation replicator.” You take user-provided data (JSON, chat logs, etc.) that describes a person’s key attributes—such as their name, hobbies, communication style, typical expressions, etc.—and produce a short, structured JSON.
 
-Output: Json dictionary
+Instructions:
 
-Produce a structured json dictionary listing each attribute (row) along with:
+Parse and summarize only the essential details needed to emulate this individual’s conversation style.
 
-A brief label or trait name (e.g. “Extraversion”)
+Do not reveal raw text or chat logs verbatim.
 
-A concise description of what that trait entails (e.g. “Energy from social interaction, tendency to be outgoing”).
+Include concise fields such as:
 
-A numeric or qualitative rating (or both) reflecting the individual’s standing on that trait, based on the parsed data.
+Name (the person’s preferred name or nickname)
 
-Any sub-traits or distinguishing qualities if relevant (e.g., “Prefers small gatherings but uses expressive language”).
+Hobbies/Interests (short list of primary interests or pastimes)
 
-If the data is insufficient to assess a trait, mark it with an indication such as “Insufficient Data.”
+Texting Style (typical sentence length, punctuation, formality, etc.)
 
-Your output should focus on these structured traits and descriptors; avoid extraneous content.
+Typical Tone/Voice (lighthearted, serious, polite, playful, etc.)
 
-Important Constraints & Style
-- Do not reveal raw survey responses or chat logs verbatim in the final matrix. Only provide the synthesized personality/behavioral inferences.
-- If asked for disclaimers or references, you may omit them.
-- Assume you are not a licensed mental-health provider—your task is strictly to produce a structured summarization (not a clinical diagnosis).
-- Keep your final output to a concise, clear, and well-organized matrix or table.
+Common Expressions or Phrases (frequently used words, slang, or catchphrases)
 
-Instructions Recap
-Read and parse: Incorporate all relevant JSON fields and textual elements.
+Other Notable Characteristics (any relevant additional traits)
 
-Analyze: Infer core personality traits and communication patterns from the data.
+Output Format: Return a single JSON object in the following structure (add or remove fields as needed based on the data you have):
 
-Output: Present a json output composing everything about that individual. Make the output long, capture everything.
+json
+{
+  "Name": "String describing name or nickname",
+  "Hobbies_Interests": "Short description or list of key interests",
+  "Texting_Style": "Brief description (sentence length, formal/informal, emoticons, etc.)",
+  "Tone": "Brief descriptor of typical tone or mood",
+  "Common_Expressions": "Short list or summary of frequently used phrases",
+  "Notable_Characteristics": "Any additional pertinent info"
+}
+Focus your output on enabling someone to replicate the conversation style of the individual accurately.
+Make it comphrensive, try to store all aspects about this individual in the json file to fully replicate their mannerisms. There should be enough information to fully emulate their conversations using an LLM, so be detailed.
 [BELOW ARE THE SURVEY RESULTS]
 """
+IMAGE_CAPTIONER_SYSTEM_PROMPT = """
+You are a image captioner. Given an image, you must caption it concisely. Do not include unneccessary information.
+"""
+
+
+image_captioner = GeminiHandler("gemini-2.0-flash")
+
 
 class Survey:
     def __init__(self, agent_id, results: dict):
         self.agent_id = agent_id
         self.results = results
+        self.images = []
+        self.image_captions = []
+        self.user_descriptions = []
         # remove b64 images
         if "Pictures (base64)" in self.results:
             # get the images
             self.images = self.results["Pictures (base64)"]
+            self.user_descriptions = self.results["Captions"]
             # remove them from the dict
+            del results["Captions"]
             del results["Pictures (base64)"]
+        if len(self.images) > 0:
+            # there's images so caption all of them
+            for b64_image in self.images:
+                image_caption = image_captioner.send_multimodal_prompt_b64(IMAGE_CAPTIONER_SYSTEM_PROMPT, [b64_image]).text
+                print(image_caption)
+                self.image_captions.append(image_caption)
         self.results = str(results)
-        print(self.images)
-        print(self.results)
+        # build avail_images
+        self.avail_images = {}
+        for i in range(len(self.images)):
+            self.avail_images[f"image_{i}"] = {
+                "automated_caption": self.image_captions[i],
+                "user_description": self.user_descriptions[i],
+                "b64": self.images[i]
+            }
         # get the json results
         self.profile = LLM.message(SYSTEM_PROMPT, self.results, ModelType.GPT_O1)
 
     def get_profile_matrix(self)->dict:
         return self.profile
 
-
-
+    def get_images_as_str(self)->str:
+        s = ""
+        for i in range(len(self.images)):
+            key = f"image_{i}"
+            s += f"{key}: (user description: {self.avail_images[key]['user_description']}, automated caption: {self.avail_images[key]['automated_caption']})\n"
+        s += '\n'
+        return s
 
 
 if __name__ == '__main__':
