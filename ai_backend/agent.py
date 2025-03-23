@@ -12,7 +12,6 @@ You may end the conversation only if it is reflected by the profile matrix (e.g.
 Just output the message nothing else, you may stop the conversation by outputting "[STOP]" only. You may stop whenever it reflects your profile matrix.
 Do not output your name, just output your message only. Use chatlogs only to copy the mannerisms and vibes, do not output messages in prior logs. Only use it as a reference. Do not be steortypical base your mannerisms on chatlogs if they exist, otherwise use profile matrix. Match the style of the logs in terms of texting style and semantics.
 You may also send images based on the available images given to you, each image will have a user written caption, and an automated caption (from a vision model). Do not spam instances of image sending, only send images with text when required and make sure it reflects their profile, people who overshare may be more inclined to send more images for instance.
-The images in the message history will be given in the respective ordering of the history i.e first image will correspond to image_1.
 """
 
 MESSAGE_TYPES = """
@@ -25,6 +24,8 @@ IMAGE: image_i (i.e image_1 nothing else)
 3) Stopping:
 TEXT: [STOP]
 DO NOT PREPEND AGENT SPEAKING, YOU MUST FOLLOW THE FORMAT ABOVE.
+The images in the given to you is associated in the image ordering of the chat i.e first image will correspond to the first message that has an image. Try to react to images.
+You are encouraged to try to send images.
 """
 
 
@@ -47,35 +48,90 @@ class Agent:
 
     def parse_response(self, response_text: str) -> dict:
         """
-        Accumulates all TEXT: lines into a single string and captures
-        any IMAGE: line (e.g. 'image_3'). Returns one dictionary with:
-        {
-            "type": "text" or "text+image",
-            "text": "...",
-            "image": "image_X" or ""
-        }
+        Parses response_text to extract combined text and detect one image reference
+        (no matter its casing). The logic is:
+        1) Remove/accumulate all text from lines beginning with 'TEXT:' (ignoring case)
+        while dropping the 'TEXT:' prefix.
+        2) Identify references like 'image_1' or 'IMAGE_42' anywhere in the text.
+        As soon as found, store the reference in lowercase (e.g. 'image_1'), remove
+        it from text, and treat it as the selected image.
+        3) Remove any 'Agent_i' references (ignoring case) from the combined text.
+        4) Remove any bare 'TEXT:' tokens (ignoring case) from the combined text as well.
+        5) Output a dictionary with:
+            {
+                "text": <combined_text_without_image_references_or_TEXT_prefixes>,
+                "image": <image_reference_in_lowercase_if_found_else_empty_string>
+            }
         """
+
+        # Split by newlines
         lines = response_text.strip().split('\n')
-        text_parts = []
-        image = ""
+
+        # For accumulating cleaned lines
+        cleaned_lines = []
+        image_ref = ""
+
+        # Regex to detect 'TEXT:' prefix ignoring case
+        text_prefix_pattern = re.compile(r'(?i)^\s*TEXT:\s*(.*)$')
+
+        # Regex to detect "IMAGE:" ignoring case plus a subsequent image reference.
+        # Example matches: "IMAGE: image_1", "image: image_42"
+        image_prefixed_pattern = re.compile(r'(?i)\bIMAGE\s*:\s*(image_\d+)\b')
+
+        # Regex to detect direct references to 'image_<number>' ignoring case
+        image_direct_pattern = re.compile(r'(?i)\bimage_\d+\b')
 
         for line in lines:
-            line = line.strip()
-            # Accumulate all TEXT:
-            if line.startswith("TEXT:"):
-                text_parts.append(line[len("TEXT:"):].strip())
-            # If there's an IMAGE: line, store it
-            elif line.startswith("IMAGE:"):
-                image = line[len("IMAGE:"):].strip()
+            line_stripped = line.strip()
 
-        # Combine all text into a single string
-        combined_text = " ".join(text_parts)
+            # If line starts with TEXT:, ignore that prefix
+            text_prefix_match = text_prefix_pattern.match(line_stripped)
+            if text_prefix_match:
+                content = text_prefix_match.group(1)
+            else:
+                content = line_stripped
 
+            # 1) Remove all "IMAGE: image_n" patterns
+            while True:
+                match = image_prefixed_pattern.search(content)
+                if not match:
+                    break
+                # 'image_3' from the capturing group
+                snippet = match.group(1)
+                # Record the last reference found
+                image_ref = snippet.lower()
+                # Remove the entire pattern
+                content = (content[:match.start()] + content[match.end():]).strip()
+
+            # 2) Remove direct references like 'image_1' with no 'IMAGE:' prefix
+            while True:
+                direct_match = image_direct_pattern.search(content)
+                if not direct_match:
+                    break
+                snippet = direct_match.group(0)  # e.g. 'image_2'
+                image_ref = snippet.lower()      # record the last reference
+                content = (content[:direct_match.start()] + content[direct_match.end():]).strip()
+
+            if content:
+                cleaned_lines.append(content)
+
+        # Combine the text
+        combined_text = " ".join(cleaned_lines)
+
+        # 3) Remove all "Agent_i" references (ignoring case)
+        combined_text = re.sub(r'(?i)\bagent_\d+\b', '', combined_text)
+
+        # 4) Remove any standalone 'TEXT:' tokens (ignoring case)
+        combined_text = re.sub(r'(?i)\btext:\b', '', combined_text)
+
+        # Clean extra whitespace
+        combined_text = re.sub(r'\s+', ' ', combined_text).strip()
 
         return {
             "text": combined_text,
-            "image": image
+            "image": image_ref
         }
+
 
     def _build_prompt_for_gemini(self) -> str:
         """
@@ -115,7 +171,7 @@ class Agent:
         """
         prompt, images = self._build_prompt_for_gemini()
         response = self.gemini.send_multimodal_prompt_b64(prompt, images).text
-        print(response)
+        # print(response)
         parsed_response = self.parse_response(response)
         return parsed_response
 
@@ -207,11 +263,12 @@ class EvaluatorAgent:
     SYSTEM_PROMPT = """
     You are a conversation evaluator, given two profiles from two speakers and their conversation log, you will evaluate their overall coversation and compatability.
     Make sure you evaluation is rooted more in the actual conversation and less in the profiles, two people with differing profiles still can have a compatable relationship if their conversation was insightful.
+    Compatability may not be equal both ways, remember.
     """
     OUTPUT_FORMAT = """
     You must output in this format, do not output anything else besides what is below:
     Score: (score of compatability reflective of the current evaluation's target's profile, from 0 to a 10 - 10 being best compatability if the conversation reflects their profile)
-    Notes: (put notes about the conversation, anything that was valuable, in one singular line)
+    Analysis: (put an analysis of the speaker's conversation from what they said, what they should work on, etc...)
     """
 
     def __init__(self, speaker1: Agent, speaker2: Agent, gemini_handler: GeminiHandler):
@@ -220,8 +277,8 @@ class EvaluatorAgent:
         self.gemini_handler = gemini_handler
         self.logs = []
     
-    def add_log(speaker: Agent, message: str):
-        self.logs.append((speaker.id, message))
+    def add_log(self, speaker: Agent, message: str, sentiment: str="neutral", image_str: str=""):
+        self.logs.append(f"[speaker: {speaker.id} | sentiment: {sentiment}]\n[message]\n{message}\n[image]\n{image_str}")
 
     def parse_response(self, response: str) -> (int, str):
         """
@@ -237,8 +294,8 @@ class EvaluatorAgent:
                     score = int(score_str)
                 except ValueError:
                     score = 0
-            elif line.startswith("Notes:"):
-                notes = line[len("Notes:"):].strip()
+            elif line.startswith("Analysis:"):
+                notes = line[len("Analysis:"):].strip()
         if score is None:
             score = 0
         if notes is None:
@@ -247,17 +304,18 @@ class EvaluatorAgent:
 
 
     def get_evaluation(self) -> (int, str, int, str):
-        convo = "\n".join([f"{data[0]}: {data[1]}" for data in self.logs])
-        prompt = f"[SYSTEM]{SYSTEM_PROMPT}\n[Speaker: {self.speaker1.id}'s Profile]\n{self.speaker1.profile}\n[Speaker: {self.speaker2.id}'s Profile]\n{self.speaker2.profile}\n[FULL CONVERSATION]\n{convo}\n" 
+        convo = "\n".join([data for data in self.logs])
+        print(convo)
+        prompt = f"[SYSTEM]{self.SYSTEM_PROMPT}\n[Speaker: {self.speaker1.id}'s Profile]\n{self.speaker1.profile}\n[Speaker: {self.speaker2.id}'s Profile]\n{self.speaker2.profile}\n[FULL CONVERSATION]\n{convo}\n" 
         # first do evaluation on first speaker
-        first_speaker_prompt = f"{prompt}\nOnly do evaluation on {self.speaker1.id}."
+        first_speaker_prompt = f"{prompt}\nOnly do evaluation on {self.speaker1.id}\n{self.OUTPUT_FORMAT}"
         first_request = GeminiTextRequest(prompt=first_speaker_prompt)
         first_speaker_response = self.gemini_handler.send_text_prompt(first_request).text
-        first_speaker_score, first_speaker_notes = parse_response(first_speaker_response)
-        second_speaker_prompt = f"{prompt}\nOnly do evaluation on {self.speaker2.id}."
+        first_speaker_score, first_speaker_notes = self.parse_response(first_speaker_response)
+        second_speaker_prompt = f"{prompt}\nOnly do evaluation on {self.speaker2.id}\n{self.OUTPUT_FORMAT}"
         second_request = GeminiTextRequest(prompt=second_speaker_prompt)
         second_speaker_response = self.gemini_handler.send_text_prompt(second_request).text
-        second_speaker_score, second_speaker_notes = parse_response(second_speaker_response)
+        second_speaker_score, second_speaker_notes = self.parse_response(second_speaker_response)
         return first_speaker_score, first_speaker_notes, second_speaker_score, second_speaker_notes
 
 class SentimentAgent:
@@ -267,7 +325,7 @@ class SentimentAgent:
     Given an individual's profile (properties about that) and their current conversation message, 
     return the related conversation engagement emotion. 
     This emotion should reflect that individual's profile, so more accepting people may not get as bored as quickly while people with ADHD might be bored more early. 
-    Use your judgement and make sure it reflects the profile.
+    Use your judgement and make sure it reflects the profile. 
     """
     def __init__(self, profile, gemini_handler: GeminiHandler):
         """
@@ -278,13 +336,13 @@ class SentimentAgent:
 
 
     def _get_sentiment_str(self):
-        return f"You may only return one of the following sentiments: {EMOTIONS}\. Do not send any other sentiment"
+        return f"You may only return one of the following sentiments: {self.EMOTIONS}\. Do not send any other sentiment"
     
-    def get_sentiment_for_message(message: str):
+    def get_sentiment_for_message(self, message: str):
         """
         Get the sentiment of current message from profile.
         """
         prompt = f"[SYSTEM PROMPT]\n{self.SYSTEM_PROMPT}\n[Message]\n{message}\n{self._get_sentiment_str()}"
         req = GeminiTextRequest(prompt=prompt)
-        response = self.gemini_handler.send_text_prompt(gemini_request).text
+        response = self.gemini_handler.send_text_prompt(req).text
         return response.lower()

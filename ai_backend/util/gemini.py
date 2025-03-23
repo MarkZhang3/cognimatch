@@ -126,7 +126,7 @@ class GeminiHandler:
 
         # Include the prompt and all images in the parts list
         parts = [prompt] + images
-        print('images len:')
-        print(len(images))
+        # print('images len:')
+        # print(len(images))
         request = GeminiMultimodalRequest(parts=parts)
         return self.send_multimodal_prompt(request)
