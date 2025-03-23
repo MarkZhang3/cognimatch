@@ -21,6 +21,8 @@ app = FastAPI()
 
 surveys: dict[str, Survey] = {}
 
+convo_evaluations: dict[str, EvaluatorAgent] = {}
+
 async def event_generator():
     # Simulate a stream of events (e.g. log lines, live updates, etc.)
     for i in range(1, 11):
@@ -32,6 +34,14 @@ class SaveFormRequest(BaseModel):
     id: str
     form: Dict[str, Any]  
 
+class GetConvoResultsRequest(BaseModel):
+    convo_id: str
+
+class ConvoResults(BaseModel):
+    speaker_1_compatability_with_speaker_2: int
+    speaker_2_compatability_with_speaker_1: int
+    speaker_1_analysis: str
+    speaker_2_analysis: str
 
 class StartConvoRequest(BaseModel):
     convo_id: str
@@ -85,12 +95,13 @@ def get_response_detailed(agent, response):
     return message, "", ""
 
 
-def send_to_front_end(speaker: str, text: str, b_64_image: str = "", sentiment = "neutral", is_last: bool=False):
+def send_to_front_end(speaker: str, speaking_to: str, text: str, b_64_image: str = "", sentiment = "neutral", is_last: bool=False):
     url = "https://42c3-138-51-69-250.ngrok-free.app/chat"
     
     # make the JSON payload
     payload = {
         "speaker": speaker,
+        "speaking_to": speaking_to,
         "text": text,
         "b_64_image": b_64_image,
         "sentiment": sentiment,
@@ -131,11 +142,11 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
         sentiment_2 = sentiment_agent_2.get_sentiment_for_message(text_2)
         eval_agent.add_log(agent2, text_2, sentiment_2, image_str_2)
         if "[STOP]" in text_2:
-            send_to_front_end(agent2.name, text_2, image_b64_2, sentiment_2, True)
+            send_to_front_end(agent2.name, agent1.name, text_2, image_b64_2, sentiment_2, True)
             eval_agent.add_log(agent2, "<STOPPED THE CONVERSATION>")
             print("\nAgent2 indicated stop.\n")
             break
-        send_to_front_end(agent2.name, text_2, image_b64_2, sentiment_2, False)
+        send_to_front_end(agent2.name, agent1.name, text_2, image_b64_2, sentiment_2, False)
         agent2.talk_to(agent1, text_2, image_b64_2, image_str_2)
         # Introduce a small delay
         time.sleep(delay)
@@ -152,11 +163,11 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
         sentiment_1 = sentiment_agent_2.get_sentiment_for_message(text_1)
         eval_agent.add_log(agent1, text_1, sentiment_1, image_str_1)
         if "[STOP]" in text_1:
-            send_to_front_end(agent1.name, text_1, image_b64_1, sentiment_1, True)
+            send_to_front_end(agent1.name, agent2.name, text_1, image_b64_1, sentiment_1, True)
             eval_agent.add_log(agent1, "<STOPPED THE CONVERSATION>")
             print("\nAgent1 indicated stop.\n")
             break
-        send_to_front_end(agent1.name, text_1, image_b64_1, sentiment_1, False)
+        send_to_front_end(agent1.name, agent2.name, text_1, image_b64_1, sentiment_1, turn_count == max_turns)
         agent1.talk_to(agent2, text_1, image_b64_1, image_str_1)
 
         # Introduce a small delay
@@ -192,12 +203,30 @@ async def start_conversation(data: StartConvoRequest):
     sentiment_agent_2 = SentimentAgent(surveys[speaker_2_id].get_profile_matrix(), quick_gemini_handler)
     # build evaluator
     evaluator_agent = EvaluatorAgent(agent_1, agent_2, reasoning_gemini_handler)
+    convo_evaluations[data.convo_id] = evaluator_agent
     # start the convo
     start_convo(agent_1, agent_2, safety_agent, evaluator_agent, sentiment_agent_1, sentiment_agent_2)
 
 @app.get("/stream")
 async def stream():
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+
+@app.get("/get_compatability_for_convo", response_model=ConvoResults)
+async def get_compatability_results(convo_id: str):
+    if convo_id not in convo_evaluations:
+        raise HTTPException(status_code=400, detail=f"convo id has no results.")
+    
+    # get convo results
+    speaker_1_score, speaker_1_analysis, speaker_2_score, speaker_2_analysis = convo_evaluations[convo_id].get_evaluation()
+    return ConvoResults(
+        speaker_1_compatability_with_speaker_2=speaker_1_score,
+        speaker_1_analysis=speaker_1_analysis,
+        speaker_2_compatability_with_speaker_1=speaker_2_score,
+        speaker_2_analysis=speaker_2_analysis
+    )
+
 
 
 @app.on_event("startup")

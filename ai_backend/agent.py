@@ -254,11 +254,12 @@ class EvaluatorAgent:
     SYSTEM_PROMPT = """
     You are a conversation evaluator, given two profiles from two speakers and their conversation log, you will evaluate their overall coversation and compatability.
     Make sure you evaluation is rooted more in the actual conversation and less in the profiles, two people with differing profiles still can have a compatable relationship if their conversation was insightful.
+    You should be critical and realistic, don't give everyone a high compatability. Compatability may not work both ways.
     """
     OUTPUT_FORMAT = """
     You must output in this format, do not output anything else besides what is below:
     Score: (score of compatability reflective of the current evaluation's target's profile, from 0 to a 10 - 10 being best compatability if the conversation reflects their profile)
-    Notes: (put notes about the conversation, anything that was valuable, in one singular line)
+    Analysis: (put an analysis of the speaker's conversation from what they said, what they should work on, etc...)
     """
 
     def __init__(self, speaker1: Agent, speaker2: Agent, gemini_handler: GeminiHandler):
@@ -284,8 +285,8 @@ class EvaluatorAgent:
                     score = int(score_str)
                 except ValueError:
                     score = 0
-            elif line.startswith("Notes:"):
-                notes = line[len("Notes:"):].strip()
+            elif line.startswith("Analysis:"):
+                notes = line[len("Analysis:"):].strip()
         if score is None:
             score = 0
         if notes is None:
@@ -315,7 +316,7 @@ class SentimentAgent:
     Given an individual's profile (properties about that) and their current conversation message, 
     return the related conversation engagement emotion. 
     This emotion should reflect that individual's profile, so more accepting people may not get as bored as quickly while people with ADHD might be bored more early. 
-    Use your judgement and make sure it reflects the profile.
+    Use your judgement and make sure it reflects the profile. 
     """
     def __init__(self, profile, gemini_handler: GeminiHandler):
         """
