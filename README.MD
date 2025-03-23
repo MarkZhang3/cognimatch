@@ -58,6 +58,12 @@ One of our core goals was to transform raw survey data into an expressive but co
 ### Connecting Web Front End / Backend With AI Python Backend
 Integrating a web frontend / backend with 3D animations and multiple Python AI endpoints on a cloud VM required a well planned data flow strategy / architecture. We established well-defined API routes and architecture in FastAPI and web sockets to stream conversations and images through the different techstack layers. 
 
+## Instructions to run
+0. Have users fill out the google form [link](https://docs.google.com/forms/d/e/1FAIpQLSd29u5Azwebf3KWatSvqHK5SJ-eNMvG6q3imLG2gZgb8n7lnA/viewform?usp=dialog)
+1. Install requirements.txt, run `source env/bin/activate`
+2. run `fetch_form_responses.py` to fetch data from forms 
+3. run `uvicorn main:app --host 0.0.0.0 --port 8000 --reload` to run python api backend 
+
 ## Accomplishments that we're proud of
 - We successfully orchestrated four specialized agents using different Gemini model variants, all running in real-time and interacting meaningfully.
 - Our system doesn't just handle text; agents can also exchange and discuss user-uploaded images
