@@ -1,5 +1,6 @@
-from util.gemini import GeminiHandler, GeminiResponse, GeminiTextRequest, GeminiImage
+from util.gemini import GeminiHandler, GeminiResponse, GeminiTextRequest, GeminiImage, GeminiMultimodalRequest
 from typing import Tuple
+import re
 
 SYSTEM_PROMPT_AGENT = """
 You are a conversation emulator. 
@@ -10,24 +11,71 @@ and messages from the other agent will be indicated by their agent name.
 You may end the conversation only if it is reflected by the profile matrix (e.g. the individual is an introvert).
 Just output the message nothing else, you may stop the conversation by outputting "[STOP]" only. You may stop whenever it reflects your profile matrix.
 Do not output your name, just output your message only. Use chatlogs only to copy the mannerisms and vibes, do not output messages in prior logs. Only use it as a reference. Do not be steortypical base your mannerisms on chatlogs if they exist, otherwise use profile matrix. Match the style of the logs in terms of texting style and semantics.
+You may also send images based on the available images given to you, each image will have a user written caption, and an automated caption (from a vision model). Do not spam instances of image sending, only send images with text when required and make sure it reflects their profile, people who overshare may be more inclined to send more images for instance.
+The images in the message history will be given in the respective ordering of the history i.e first image will correspond to image_1.
+"""
+
+MESSAGE_TYPES = """
+You are allowed to send two types of messages. YOU MUST FOLLOW THE BELOW TEMPLATES EXACTLY.
+1) Text only, output using this format:
+TEXT: your message here
+2) Text and image (multi modal), output using this format:
+TEXT: your message here
+IMAGE: image_i (i.e image_1 nothing else)
+3) Stopping:
+TEXT: [STOP]
+DO NOT PREPEND AGENT SPEAKING, YOU MUST FOLLOW THE FORMAT ABOVE.
+YOU AND THE OTHER PERSON WILL HAVE A CONVERSATION, YOU AREN'T DOING ANYTHING, ASSUME YOU TWO ARE SITTING ONE ROOM TALKING GETTING TO KNOW EACH OTHER. DO NOT MAKE PLANS, JUST TALK AND GET TO KNOW EACH OTHER LIKE A NORMAL CONVERSATION.
 """
 
 
-
 class Agent:
-    def __init__(self, agent_id, profile, gemini_handler: GeminiHandler):
+    def __init__(self, agent_id, survey, gemini_handler: GeminiHandler):
         """
         Initialize the Agent with an id, a profile, 
         and a GeminiHandler for generating responses.
         """
         self.id = agent_id
         self.name = f"Agent_{agent_id}"
-        self.profile = profile
+        self.survey = survey
+        self.profile = survey.get_profile_matrix()
         self.gemini = gemini_handler
         
         # We'll store each message as a dict:
         # {"from": <sender_name>, "to": <recipient_name>, "message": <text>}
         self.message_log = []
+
+    def parse_response(self, response_text: str) -> dict:
+        """
+        Accumulates all TEXT: lines into a single string and captures
+        any IMAGE: line (e.g. 'image_3'). Returns one dictionary with:
+        {
+            "type": "text" or "text+image",
+            "text": "...",
+            "image": "image_X" or ""
+        }
+        """
+        lines = response_text.strip().split('\n')
+        text_parts = []
+        image = ""
+
+        for line in lines:
+            line = line.strip()
+            # Accumulate all TEXT:
+            if line.startswith("TEXT:"):
+                text_parts.append(line[len("TEXT:"):].strip())
+            # If there's an IMAGE: line, store it
+            elif line.startswith("IMAGE:"):
+                image = line[len("IMAGE:"):].strip()
+
+        # Combine all text into a single string
+        combined_text = " ".join(text_parts)
+
+
+        return {
+            "text": combined_text,
+            "image": image
+        }
 
     def _build_prompt_for_gemini(self) -> str:
         """
@@ -39,31 +87,41 @@ class Agent:
         # Start with the system prompt
         lines = "[SYSTEM_PROMPT]\n"
         lines += SYSTEM_PROMPT_AGENT.strip() + "\n\n"
-
+        images = []
         # Add the agent's profile
         lines += "[PROFILE]\n"
         lines += self.profile.strip() + "\n\n"
-
+        # add available images
+        lines += "[AVAILABLE IMAGES]"
+        lines += self.survey.get_images_as_str()
         # Add the message history in a readable format
         lines += "[MESSAGE HISTORY]\n"
         for entry in self.message_log:
             frm = entry["from"]
             msg = entry["message"]
-            lines += f"{frm}\n{msg}\n"
-        lines += "ONLY OUTPUT YOUR MESSAGE, NOTHING ELSE.\n"
-
-        return lines
+            if entry["image_str"] != "":
+                # an image was sent so parse it
+                image_str = entry["image_str"]
+                lines += f"[{frm}]\n{msg}\n(image in message)\n{image_str}\n"
+                images.append(entry["image_b64"])
+            else:
+                lines += f"[{frm}]\n{msg}\n"
+        lines += MESSAGE_TYPES
+        return lines, images
 
     def generate_response(self) -> str:
         """
         Fetches the next response from Gemini (single-shot, no streaming).
         """
-        prompt = self._build_prompt_for_gemini()
-        request = GeminiTextRequest(prompt=prompt)
-        response = self.gemini.send_text_prompt(request)
-        return response.text
+        prompt, images = self._build_prompt_for_gemini()
+        parts = [prompt] + images
+        request = GeminiMultimodalRequest(parts=parts)
+        response = self.gemini.send_multimodal_prompt(request).text
+        print(response)
+        parsed_response = self.parse_response(response)
+        return parsed_response
 
-    def talk_to(self, other_agent: "Agent", message: str):
+    def talk_to(self, other_agent, message: str, image_b64: str="", image_str: str=""):
         """
         Sends a message to another Agent.
         """
@@ -71,20 +129,24 @@ class Agent:
         self.message_log.append({
             "from": self.name,
             "to": other_agent.name,
-            "message": message
+            "message": message,
+            "image_b64": image_b64,
+            "image_str": image_str,
         })
 
         # Deliver the message to the other agent
-        other_agent.receive_message(message, self)
+        other_agent.receive_message(message, self, image_b64, image_str)
 
-    def receive_message(self, message: str, from_agent: "Agent"):
+    def receive_message(self, message: str, from_agent, image_b64: str, image_str: str):
         """
         Handles receiving a message from another Agent.
         """
         self.message_log.append({
             "from": from_agent.name,
             "to": self.name,
-            "message": message
+            "message": message,
+            "image_b64": image_b64,
+            "image_str": image_str,
         })
 
     def show_message_log(self):

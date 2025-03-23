@@ -4,6 +4,7 @@ from typing import List, Union, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 import google.generativeai as genai
+import base64
 
 # ------------------------
 # Global Rate Limiting
@@ -100,3 +101,30 @@ class GeminiHandler:
 
         response = self.model.generate_content(parts)
         return GeminiResponse(text=response.text, raw=response)
+
+    def send_multimodal_prompt_b64(
+        self,
+        prompt: str,
+        b64_image_strs: list[str],
+        mime_type: str = "image/png"
+    ) -> GeminiResponse:
+        """
+        Accepts a list of base64-encoded image strings and sends a multimodal prompt.
+        Strips data URI prefix if present in any image.
+        """
+        images = []
+        for b64_image_str in b64_image_strs:
+            # Strip data URI prefix if it's there
+            if b64_image_str.startswith("data:"):
+                b64_image_str = b64_image_str.split(",", 1)[1]
+            try:
+                image_bytes = base64.b64decode(b64_image_str)
+            except Exception as e:
+                raise ValueError("Failed to decode base64 image string") from e
+
+            images.append(GeminiImage(mime_type=mime_type, data=image_bytes))
+
+        # Include the prompt and all images in the parts list
+        parts = [prompt] + images
+        request = GeminiMultimodalRequest(parts=parts)
+        return self.send_multimodal_prompt(request)
