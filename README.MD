@@ -1,4 +1,5 @@
-## CogniMatch
+# CogniMatch
+
 **Building Profile From Survey**
 
 Using heuristic-based processes and preprocessing, we first filter and prepare the completed survey for the reasoning model (`chatGPT o1`). Afterwards, we use prompt-engineering and postprocessing to create an object representation (profile) for the individual, the agent will use this profile to guide its conversations. 
