@@ -25,8 +25,8 @@ IMAGE: image_i (i.e image_1 nothing else)
 3) Stopping:
 TEXT: [STOP]
 DO NOT PREPEND AGENT SPEAKING, YOU MUST FOLLOW THE FORMAT ABOVE.
-YOU AND THE OTHER PERSON WILL HAVE A CONVERSATION, YOU AREN'T DOING ANYTHING, ASSUME YOU TWO ARE SITTING ONE ROOM TALKING GETTING TO KNOW EACH OTHER. DO NOT MAKE PLANS, JUST TALK AND GET TO KNOW EACH OTHER LIKE A NORMAL CONVERSATION.
 """
+
 
 
 class Agent:
@@ -114,9 +114,7 @@ class Agent:
         Fetches the next response from Gemini (single-shot, no streaming).
         """
         prompt, images = self._build_prompt_for_gemini()
-        parts = [prompt] + images
-        request = GeminiMultimodalRequest(parts=parts)
-        response = self.gemini.send_multimodal_prompt(request).text
+        response = self.gemini.send_multimodal_prompt_b64(prompt, images).text
         print(response)
         parsed_response = self.parse_response(response)
         return parsed_response
@@ -159,6 +157,7 @@ class Agent:
             to = entry["to"]
             msg = entry["message"]
             print(f"[{frm} -> {to}] {msg}")
+        print(self.message_log)
 
 
 class SafetyAgent:

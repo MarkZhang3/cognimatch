@@ -82,7 +82,7 @@ def get_response_detailed(agent, response):
         image_caption = image_details["automated_caption"]
         return message, image_b64, f"(user description: {user_description}, image caption: {image_caption})"
     return message, "", ""
-def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_agent: EvaluatorAgent, sentiment_agent_1: SentimentAgent, sentiment_agent_2: SentimentAgent, max_turns: int = 25, delay: float = 2.0):
+def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_agent: EvaluatorAgent, sentiment_agent_1: SentimentAgent, sentiment_agent_2: SentimentAgent, max_turns: int = 20, delay: float = 2.0):
     """
     Lets agent1 and agent2 talk to each other in a loop, 
     streaming each response in real-time, until one outputs "[STOP]" 
@@ -90,7 +90,7 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
     A small delay can be introduced between messages using the 'delay' parameter.
     """
     # Start with agent1 greeting agent2
-    agent1.talk_to(agent2, "[SYSTEM]\n YOU WILL BEGIN THE CONVERSATION AND START FIRST.")
+    agent1.talk_to(agent2, "[SYSTEM]\n THE GOAL IS TO GETTING TO KNOW EACH OTHER. YOU TWO MUST HAVE A CONVERSATION, DO NOT MENTION PLANS, JUST GET TO KNOW EACH OTHER, TALK ABOUT YOURSELVES REFLECTED BY THE PROFILE. FIRST INTRODUCE YOURSELF.")
 
     turn_count = 0
     while turn_count < max_turns:
