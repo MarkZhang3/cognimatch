@@ -11,7 +11,7 @@ from googleapiclient.http import MediaIoBaseDownload
 
 SERVICE_ACCOUNT_FILE = './service_account.json'
 SPREADSHEET_ID = '1z8uPq8oGMhmmYjQEny-vOVh-AqJpEwSrF8rkadzpR38'
-RANGE_NAME = 'Form Responses 1!A1:Q'  # Adjust range if needed
+RANGE_NAME = 'Form Responses 1!A1:AM'  # Adjust range if needed
 FORM_ENDPOINT = "http://34.27.216.29:8000/save_form"  # Replace with your actual endpoint
 # Optionally, you could load an endpoint from environment variables, e.g.:
 # FORM_ENDPOINT = os.getenv("YOUR_ENDPOINT_VAR")
@@ -120,7 +120,7 @@ def send_form_data_to_endpoint(row_data):
 # MAIN
 ########################
 
-def main():
+def fetch_and_send():
     rows = fetch_form_responses()
     if not rows:
         print("No data found.")
@@ -133,14 +133,13 @@ def main():
     # Print them just to see what we have
     print("Headers:", headers)
 
-    #
+    img_idx = 13
     for i, row in enumerate(data_rows, start=2):  # start=2 meaning row #2 in the sheet
         # Safety check: row could have fewer columns if not all questions were answered
         # if len(row) < 4:
         #     print(f"Skipping row {i} (not enough columns).")
         #     continue
-
-        drive_links = row[13].split(', ')
+        drive_links = row[img_idx].split(', ')
         base64_files = []
         for drive_link in drive_links:
             file_id = extract_file_id(drive_link)
@@ -150,7 +149,7 @@ def main():
                 base64_file = None
             base64_files.append(base64_file)
 
-        captions = row[14].split('\n')
+        captions = row[img_idx + 1].split('\n')
         
         
         # data = {
@@ -163,13 +162,12 @@ def main():
         #     "captions": captions,
         # }
         data = {
-            headers[j] : row[j] for j in range(len(headers) - 3)
+            headers[j] : row[j] for j in range(len(row)) if headers[j] not in ['Upload Pictures', 'Caption for pictures']
         }
 
         data['Pictures (base64)'] = base64_files 
         data['Captions'] = captions
-        print(row[14], len(row), len(headers))
-        data['Additional Notes'] = row[-1] if len(row) > 15 else ''
+        print(row[img_idx + 1], len(row), len(headers))
 
         to_send = {
             'id': str(i), 
@@ -182,7 +180,7 @@ def main():
         send_form_data_to_endpoint(to_send)
 
 if __name__ == "__main__":
-    #main()
+    # fetch_and_send()
 
     convo_endpoint = 'http://34.27.216.29:8000/start_convo'
     to_send = {
