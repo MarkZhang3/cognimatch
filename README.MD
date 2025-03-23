@@ -1,5 +1,31 @@
 # CogniMatch
 
+## Inspiration
+For some, the thought of starting a conversation with "Let's start with an icebreaker" or "So, what do you do?" can feel dull or even anxiety-inducing. These boring openers often don't capture who we truly are or what we even care about. 
+
+We wondered: *why not personalize our conversations* based on deeper AI-driven insights-real personality, interests, speaking styles, and more? 
+
+## What it does
+
+By building agents that reflect our unique personality, attributes, and hobbies and then letting these agents interact in a controlled virtual environment, we can watch and tailor potential conversations even before they happen in the real world. 
+
+This approach has the potential to uplift matchmaking, social conversations, and even dating. Instead of relying on surface-level algorithms or arbitrary elo systems, we can create interactions that respects real personalities and create more authentic  data-driven experiences. It's no longer simply a **"swipe-left-or-right"** interaction, but now a deeper exploration on compatibility based on how we may actually conversate with each other. By simulating these interactions, we can see firsthand where conversations flow naturally-and where they might get bumpy-giving us deep insights into who we actually connect with and why. 
+
+## How we built it
+### Cloud:
+
+Our AI API backend is hosted on a Ubuntu-based virtual machine using `Google Cloud's Compute Engine` service. Specifically, the agent API was written entirely in Python and utilized FastAPI for all its endpoints. It also interfaced with many LLM providers i.e Google Gemini and OpenAI's chatGPT with a balanced choice of different models depending on the task. 
+
+**Web Frontend / Backend**
+
+[KAILAS]
+
+
+### Building Agents (Profile)
+**Survey**
+
+To get started, users complete a custom-designed survey which is similar to a MBTI survey but with more open-ended / purposeful questions to extract all the information required to create an agentic representation of their conversational-habits.  
+
 **Building Profile From Survey**
 
 Using heuristic-based processes and preprocessing, we first filter and prepare the completed survey for the reasoning model (`chatGPT o1`). Afterwards, we use prompt-engineering and postprocessing to create an object representation (profile) for the individual, the agent will use this profile to guide its conversations. 
