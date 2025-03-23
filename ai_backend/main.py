@@ -2,6 +2,7 @@ import os
 import pickle
 import json
 import time
+import requests
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
@@ -82,7 +83,34 @@ def get_response_detailed(agent, response):
         image_caption = image_details["automated_caption"]
         return message, image_b64, f"(user description: {user_description}, image caption: {image_caption})"
     return message, "", ""
-def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_agent: EvaluatorAgent, sentiment_agent_1: SentimentAgent, sentiment_agent_2: SentimentAgent, max_turns: int = 20, delay: float = 2.0):
+
+
+def send_to_front_end(speaker: str, text: str, b_64_image: str = "", sentiment = "neutral", is_last: bool=False):
+    url = "https://42c3-138-51-69-250.ngrok-free.app/chat"
+    
+    # make the JSON payload
+    payload = {
+        "speaker": speaker,
+        "text": text,
+        "b_64_image": b_64_image,
+        "sentiment": sentiment,
+        "is_last": is_last
+    }
+    
+    # Send the POST request
+    response = requests.post(url, json=payload)
+    
+    # # Optionally, handle or print out the response
+    # if response.ok:
+    #     print("Success:", response.json())
+    # else:
+    #     print("Error:", response.status_code, response.text)
+    
+    # return response
+
+
+
+def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_agent: EvaluatorAgent, sentiment_agent_1: SentimentAgent, sentiment_agent_2: SentimentAgent, max_turns: int = 20, delay: float = 5.0):
     """
     Lets agent1 and agent2 talk to each other in a loop, 
     streaming each response in real-time, until one outputs "[STOP]" 
@@ -90,7 +118,7 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
     A small delay can be introduced between messages using the 'delay' parameter.
     """
     # Start with agent1 greeting agent2
-    agent1.talk_to(agent2, "[SYSTEM]\n THE GOAL IS TO GETTING TO KNOW EACH OTHER. YOU TWO MUST HAVE A CONVERSATION, DO NOT MENTION PLANS, JUST GET TO KNOW EACH OTHER, TALK ABOUT YOURSELVES REFLECTED BY THE PROFILE. FIRST INTRODUCE YOURSELF.")
+    agent1.talk_to(agent2, "[SYSTEM]\n THE GOAL IS TO GETTING TO KNOW EACH OTHER AND TO INTRODUCE EACH OTHER. DO NOT TALK ABOUT FUTURE PLANS, DO NOT MAKE THINGS UP, ONLY BASE CONVERSATION BASED ON PROFILE. DON'T MAKE IT SURFACE LEVEL. FIRST INTRODUCE YOURSELF.")
 
     turn_count = 0
     while turn_count < max_turns:
@@ -100,9 +128,14 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
         # Agent2 streams its response
         response2 = agent2.generate_response()
         text_2, image_b64_2, image_str_2 = get_response_detailed(agent2, response2)
+        sentiment_2 = sentiment_agent_2.get_sentiment_for_message(text_2)
+        eval_agent.add_log(agent2, text_2, sentiment_2, image_str_2)
         if "[STOP]" in text_2:
+            send_to_front_end(agent2.name, text_2, image_b64_2, sentiment_2, True)
+            eval_agent.add_log(agent2, "<STOPPED THE CONVERSATION>")
             print("\nAgent2 indicated stop.\n")
             break
+        send_to_front_end(agent2.name, text_2, image_b64_2, sentiment_2, False)
         agent2.talk_to(agent1, text_2, image_b64_2, image_str_2)
         # Introduce a small delay
         time.sleep(delay)
@@ -116,17 +149,23 @@ def start_convo(agent1: Agent, agent2: Agent, safety_agent: SafetyAgent, eval_ag
         # Agent1 streams its response
         response1 = agent1.generate_response()
         text_1, image_b64_1, image_str_1 = get_response_detailed(agent1, response1)
+        sentiment_1 = sentiment_agent_2.get_sentiment_for_message(text_1)
+        eval_agent.add_log(agent1, text_1, sentiment_1, image_str_1)
         if "[STOP]" in text_1:
+            send_to_front_end(agent1.name, text_1, image_b64_1, sentiment_1, True)
+            eval_agent.add_log(agent1, "<STOPPED THE CONVERSATION>")
             print("\nAgent1 indicated stop.\n")
             break
-
+        send_to_front_end(agent1.name, text_1, image_b64_1, sentiment_1, False)
         agent1.talk_to(agent2, text_1, image_b64_1, image_str_1)
 
         # Introduce a small delay
         time.sleep(delay)
 
-    agent1.show_message_log()
-    agent2.show_message_log()
+    # evaluate from evaluator
+    print(eval_agent.get_evaluation())
+    # agent1.show_message_log()
+    # agent2.show_message_log()
 
 @app.post("/start_convo")
 async def start_conversation(data: StartConvoRequest):

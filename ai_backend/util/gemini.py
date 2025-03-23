@@ -9,7 +9,7 @@ import base64
 # ------------------------
 # Global Rate Limiting
 # ------------------------
-RATE_LIMIT = 1000
+RATE_LIMIT = 500
 requests_made_this_minute = 0
 minute_start_time = time.time()
 
@@ -126,7 +126,7 @@ class GeminiHandler:
 
         # Include the prompt and all images in the parts list
         parts = [prompt] + images
-        print('images len:')
-        print(len(images))
+        # print('images len:')
+        # print(len(images))
         request = GeminiMultimodalRequest(parts=parts)
         return self.send_multimodal_prompt(request)
