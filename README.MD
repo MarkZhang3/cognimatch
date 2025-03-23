@@ -16,11 +16,6 @@ This approach has the potential to uplift matchmaking, social conversations, and
 
 Our AI API backend is hosted on a Ubuntu-based virtual machine using `Google Cloud's Compute Engine` service. Specifically, the agent API was written entirely in Python and utilized FastAPI for all its endpoints. It also interfaced with many LLM providers i.e Google Gemini and OpenAI's chatGPT with a balanced choice of different models depending on the task. 
 
-**Web Frontend / Backend**
-
-[KAILAS]
-
-
 ### Building Agents (Profile)
 **Survey**
 
@@ -46,10 +41,6 @@ Also uses `Gemini 1.5 Pro` to analyze conversation logs to produce compatibility
 
 #### Sentiment Agent
 Uses `Gemini 1.5 Flash (8B)` (lightweight but powerful) to classify user utterance in real time-determining if the agent is engaged, bored, or excited based on the given user profile data too.
-
-### Web Frontend / Backend
-
-[KAILAS]
 
 ## Challenges we ran into
 
